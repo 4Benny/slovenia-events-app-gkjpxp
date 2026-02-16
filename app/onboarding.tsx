@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  useWindowDimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -19,6 +20,7 @@ import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Brand from "@/constants/Colors";
 import { CITY_FALLBACK_COORDS, normalizeCityKey } from "@/utils/geo";
+import { CONTENT_MAX_WIDTH, getResponsiveHorizontalPadding } from "@/utils/responsive";
 
 const LOCATION_STORAGE_KEY = "eventfinder_user_location";
 
@@ -38,6 +40,8 @@ const SLOVENIAN_REGIONS = [
 
 export default function OnboardingScreen() {
   const router = useRouter();
+  const { width: screenWidth } = useWindowDimensions();
+  const paddingHorizontal = getResponsiveHorizontalPadding(screenWidth);
   const [username, setUsername] = useState("");
   const [age, setAge] = useState("");
   const [region, setRegion] = useState("");
@@ -194,7 +198,17 @@ export default function OnboardingScreen() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          <View style={styles.content}>
+          <View
+            style={[
+              styles.content,
+              {
+                paddingHorizontal,
+                maxWidth: CONTENT_MAX_WIDTH,
+                alignSelf: "center",
+                width: "100%",
+              },
+            ]}
+          >
             <Text style={styles.title}>Dobrodošli!</Text>
             <Text style={styles.subtitle}>Nastavite svoj profil</Text>
 
@@ -290,7 +304,6 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: 24,
     justifyContent: "center",
   },
   title: {

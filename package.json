@@ -1,5 +1,5 @@
 {
-  "name": "Natively",
+  "name": "natively",
   "version": "1.0.0",
   "main": "index.ts",
   "scripts": {
@@ -9,7 +9,8 @@
     "web": "EXPO_NO_TELEMETRY=1 expo start --web",
     "build:web": "expo export -p web && npx workbox generateSW workbox-config.js",
     "build:android": "expo prebuild -p android",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "postinstall": "node scripts/fix-expo-module-scripts-tsconfig.cjs"
   },
   "dependencies": {
     "@babel/plugin-proposal-export-namespace-from": "^7.18.9",
@@ -82,6 +83,7 @@
     "eslint-config-expo": "~10.0.0",
     "eslint-plugin-import": "^2.31.0",
     "eslint-plugin-react": "^7.37.4",
+    "expo-module-scripts": "^4.0.0",
     "globals": "^15.14.0",
     "typescript": "~5.5.4",
     "webpack-cli": "^6.0.1"

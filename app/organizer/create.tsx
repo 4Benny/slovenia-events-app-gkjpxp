@@ -21,6 +21,7 @@ import { Toast } from "@/components/feedback/Toast";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
+import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "@/contexts/AuthContext";
 import * as Brand from "@/constants/Colors";
 import { coordsForCity } from "@/utils/geo";
@@ -474,23 +475,28 @@ export default function CreateEventScreen() {
               <Text style={[styles.label, { color: theme.colors.text }]}>Regija * (samo slovenske regije)</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
                 {SLOVENIAN_REGIONS.map((region) => (
+                  (() => {
+                    const isSelected = formData.region === region;
+                    return (
                   <TouchableOpacity
                     key={region}
                     style={[
                       styles.chip,
-                      formData.region === region && { backgroundColor: theme.colors.primary },
+                      isSelected && styles.chipSelected,
                     ]}
                     onPress={() => setFormData({ ...formData, region })}
                   >
                     <Text
                       style={[
                         styles.chipText,
-                        { color: formData.region === region ? Brand.primaryGradientStart : theme.colors.text },
+                        { color: isSelected ? Brand.textPrimary : theme.colors.text },
                       ]}
                     >
                       {region}
                     </Text>
                   </TouchableOpacity>
+                    );
+                  })()
                 ))}
               </ScrollView>
 
@@ -652,23 +658,28 @@ export default function CreateEventScreen() {
               <Text style={[styles.label, { color: theme.colors.text }]}>Žanr *</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
                 {GENRES.map((genre) => (
+                  (() => {
+                    const isSelected = formData.genre === genre;
+                    return (
                   <TouchableOpacity
                     key={genre}
                     style={[
                       styles.chip,
-                      formData.genre === genre && { backgroundColor: theme.colors.primary },
+                      isSelected && styles.chipSelected,
                     ]}
                     onPress={() => setFormData({ ...formData, genre })}
                   >
                     <Text
                       style={[
                         styles.chipText,
-                        { color: formData.genre === genre ? Brand.primaryGradientStart : theme.colors.text },
+                        { color: isSelected ? Brand.textPrimary : theme.colors.text },
                       ]}
                     >
                       {genre}
                     </Text>
                   </TouchableOpacity>
+                    );
+                  })()
                 ))}
               </ScrollView>
 
@@ -770,16 +781,19 @@ export default function CreateEventScreen() {
                 </TouchableOpacity>
               </View>
 
-              <TouchableOpacity
-                style={[styles.createButton, { backgroundColor: theme.colors.primary }]}
-                onPress={handleCreate}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color={Brand.primaryGradientStart} />
-                ) : (
-                  <Text style={[styles.createButtonText, { color: Brand.primaryGradientStart }]}>Ustvari dogodek</Text>
-                )}
+              <TouchableOpacity onPress={handleCreate} disabled={loading} activeOpacity={0.85}>
+                <LinearGradient
+                  colors={[Brand.btnPrimaryGradientStart, Brand.accentOrange]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={[styles.createButton, loading ? { opacity: Brand.btnDisabledOpacity } : null]}
+                >
+                  {loading ? (
+                    <ActivityIndicator color={Brand.btnPrimaryText} />
+                  ) : (
+                    <Text style={[styles.createButtonText, { color: Brand.btnPrimaryText }]}>Ustvari dogodek</Text>
+                  )}
+                </LinearGradient>
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -855,6 +869,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Brand.borderSubtle,
     marginRight: 8,
+  },
+  chipSelected: {
+    backgroundColor: Brand.secondaryGradientEnd,
+    borderColor: Brand.secondaryGradientEnd,
   },
   chipText: {
     fontSize: 14,

@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Platform,
-  Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,8 +20,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import * as Colors from '@/constants/Colors';
-
-const { width: screenWidth } = Dimensions.get('window');
+import { CONTENT_MAX_WIDTH } from '@/utils/responsive';
 
 export interface TabBarItem {
   name: string;
@@ -35,16 +34,23 @@ interface FloatingTabBarProps {
 }
 
 export default function FloatingTabBar({ tabs }: FloatingTabBarProps) {
+  const { width: screenWidth } = useWindowDimensions();
   const router = useRouter();
   const pathname = usePathname();
   const animatedValue = useSharedValue(0);
 
+  const containerWidth = React.useMemo(() => {
+    const desired = screenWidth - 32;
+    const capped = Math.min(desired, CONTENT_MAX_WIDTH);
+    return Math.max(280, capped);
+  }, [screenWidth]);
+
   const layout = React.useMemo(() => {
-    const outerWidth = screenWidth - 32; // matches styles.container width
+    const outerWidth = containerWidth; // matches container width
     const innerWidth = outerWidth - 16; // accounts for indicator left/right inset (8 + 8)
     const tabWidth = innerWidth / Math.max(1, tabs.length);
     return { outerWidth, innerWidth, tabWidth };
-  }, [tabs.length]);
+  }, [containerWidth, tabs.length]);
 
   // Improved active tab detection
   const activeTabIndex = React.useMemo(() => {
@@ -100,7 +106,8 @@ export default function FloatingTabBar({ tabs }: FloatingTabBarProps) {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['bottom']}>
-      <View style={styles.container}>
+      <View style={[styles.container, { width: containerWidth }]}
+      >
         <BlurView intensity={20} style={styles.blurContainer}>
           {/* Glassmorphism background */}
           <View style={styles.glassBackground} />
@@ -191,10 +198,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   container: {
-    marginHorizontal: 16,
     marginBottom: 16,
     alignSelf: 'center',
-    width: screenWidth - 32,
   },
   blurContainer: {
     borderRadius: Colors.borderRadiusPill,

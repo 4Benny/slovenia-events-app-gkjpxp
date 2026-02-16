@@ -10,6 +10,7 @@ import {
   Platform,
   KeyboardAvoidingView,
   ScrollView,
+  useWindowDimensions,
 } from "react-native";
 import { useRouter, Stack } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -18,6 +19,7 @@ import { supabase } from "@/app/integrations/supabase/client";
 import { IconSymbol } from "@/components/IconSymbol";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Brand from "@/constants/Colors";
+import { CONTENT_MAX_WIDTH, getResponsiveHorizontalPadding } from "@/utils/responsive";
 
 type Mode = "signin" | "signup";
 
@@ -33,6 +35,8 @@ const ALLOWED_EMAIL_DOMAINS = [
 
 export default function AuthScreen() {
   const router = useRouter();
+  const { width: screenWidth } = useWindowDimensions();
+  const paddingHorizontal = getResponsiveHorizontalPadding(screenWidth);
 
   const [mode, setMode] = useState<Mode>("signin");
   const [emailOrUsername, setEmailOrUsername] = useState("");
@@ -328,7 +332,7 @@ export default function AuthScreen() {
 
         {error && (
           <Modal
-            visible={!!error}
+            visible={true}
             title={error.title}
             message={error.message}
             onClose={() => setError(null)}
@@ -352,7 +356,6 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: 24,
     justifyContent: "center",
   },
   headerRow: {

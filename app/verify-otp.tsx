@@ -9,16 +9,20 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  useWindowDimensions,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Modal } from "@/components/ui/Modal";
 import { supabase } from "@/app/integrations/supabase/client";
 import * as Brand from "@/constants/Colors";
+import { CONTENT_MAX_WIDTH, getResponsiveHorizontalPadding } from "@/utils/responsive";
 
 export default function VerifyOTPScreen() {
   const router = useRouter();
   const { email, password } = useLocalSearchParams<{ email: string; password: string }>();
+  const { width: screenWidth } = useWindowDimensions();
+  const paddingHorizontal = getResponsiveHorizontalPadding(screenWidth);
   
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
@@ -128,7 +132,17 @@ export default function VerifyOTPScreen() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardView}
       >
-        <View style={styles.content}>
+        <View
+          style={[
+            styles.content,
+            {
+              paddingHorizontal,
+              maxWidth: CONTENT_MAX_WIDTH,
+              alignSelf: "center",
+              width: "100%",
+            },
+          ]}
+        >
           <Text style={styles.title}>Verify Your Email</Text>
           <Text style={styles.subtitle}>
             We sent a 6-digit code to
@@ -195,7 +209,6 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: 24,
     justifyContent: "center",
   },
   title: {
