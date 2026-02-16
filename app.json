@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "Kje Dogaja",
+    "slug": "kje-dogaja",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/logo.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#140B2D"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.Natively",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/logo.png",
+        "backgroundColor": "#140B2D"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "com.anonymous.Natively"
+    },
+    "web": {
+      "favicon": "./assets/images/logo.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-font",
+      "expo-router",
+      "expo-web-browser"
+    ],
+    "scheme": "kjedogaja",
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "backendUrl": "http://192.168.0.38:3000"
+    }
+  }
+}
