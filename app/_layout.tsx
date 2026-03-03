@@ -200,7 +200,7 @@ export default function RootLayout() {
     dark: true,
     colors: {
       ...DarkTheme.colors,
-      primary: Brand.accentOrange,
+      primary: Brand.secondaryGradientEnd,
       background: Brand.primaryGradientStart,
       card: Brand.surfaceDark,
       text: Brand.textPrimary,

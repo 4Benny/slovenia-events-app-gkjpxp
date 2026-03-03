@@ -15,6 +15,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { IconSymbol } from "@/components/IconSymbol";
 import { supabase } from "@/app/integrations/supabase/client";
 import * as Brand from "@/constants/Colors";
+import { isLikelyUuid, parseRouteParam } from "@/utils/validation";
 
 interface Attendee {
   id: string;
@@ -24,6 +25,7 @@ interface Attendee {
 
 export default function AttendeesScreen() {
   const { id } = useLocalSearchParams();
+  const eventId = parseRouteParam(id as any);
   const router = useRouter();
   const theme = useTheme();
   const [attendees, setAttendees] = useState<Attendee[]>([]);
@@ -32,7 +34,7 @@ export default function AttendeesScreen() {
 
   useEffect(() => {
     const fetchAttendees = async () => {
-      if (!id) {
+      if (!eventId || !isLikelyUuid(eventId)) {
         setLoading(false);
         return;
       }
@@ -44,7 +46,7 @@ export default function AttendeesScreen() {
         const { data: eventData, error: eventError } = await supabase
           .from("events")
           .select("title")
-          .eq("id", id)
+          .eq("id", eventId)
           .single();
 
         if (!eventError && eventData) {
@@ -62,7 +64,7 @@ export default function AttendeesScreen() {
               avatar_url
             )
           `)
-          .eq("event_id", id);
+          .eq("event_id", eventId);
 
         if (error) {
           console.error("[Attendees] Error fetching attendees:", error);
@@ -85,7 +87,7 @@ export default function AttendeesScreen() {
     };
 
     fetchAttendees();
-  }, [id]);
+  }, [eventId]);
 
   const renderAttendee = ({ item }: { item: Attendee }) => {
     const usernameDisplay = item.username || "Neznano";

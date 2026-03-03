@@ -23,8 +23,8 @@ export const borderSubtle = 'rgba(255,255,255,0.08)';
 export const glowOrange = 'rgba(255,200,61,0.35)';
 
 // Status colors
-export const successGreen = '#22C55E';
-export const dangerRed = '#B91C1C';
+export const successGreen = '#C918FF';
+export const dangerRed = '#DC2626';
 
 // Rating stars
 export const starActive = highlightYellow;

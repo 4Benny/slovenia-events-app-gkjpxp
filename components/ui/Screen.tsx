@@ -1,5 +1,5 @@
 import React from "react";
-import { View, StyleSheet, StyleProp, ViewStyle, ScrollView } from "react-native";
+import { View, StyleSheet, StyleProp, ViewStyle, ScrollView, Platform } from "react-native";
 import { SafeAreaView, Edge } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Brand from "@/constants/Colors";
@@ -33,10 +33,12 @@ export function Screen({
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
-            {children}
+            <View style={styles.webFrame}>{children}</View>
           </ScrollView>
         ) : (
-          <View style={[styles.content, styles.contentFill, contentStyle]}>{children}</View>
+          <View style={[styles.content, styles.contentFill, contentStyle]}>
+            <View style={styles.webFrame}>{children}</View>
+          </View>
         )}
       </SafeAreaView>
     </LinearGradient>
@@ -51,5 +53,16 @@ const styles = StyleSheet.create({
   },
   contentFill: {
     flex: 1,
+  },
+  webFrame: {
+    flex: 1,
+    width: "100%",
+    ...(Platform.OS === "web"
+      ? {
+          maxWidth: 1100,
+          alignSelf: "center",
+          paddingHorizontal: 16,
+        }
+      : null),
   },
 });

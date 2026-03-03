@@ -21,9 +21,11 @@ import { Toast } from "@/components/feedback/Toast";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
+import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "@/contexts/AuthContext";
 import * as Brand from "@/constants/Colors";
 import { coordsForCity } from "@/utils/geo";
+import { normalizeLineup } from "@/utils/date";
 
 const GENRES = ["electronic", "rock", "pop", "hip-hop", "techno", "house", "trance", "dnb", "dubstep", "other"];
 
@@ -60,7 +62,20 @@ export default function CreateEventScreen() {
   const [organizers, setOrganizers] = useState<{ id: string; username: string }[]>([]);
   const [selectedOrganizerId, setSelectedOrganizerId] = useState<string>("");
 
-  const [formData, setFormData] = useState({
+  const roundToNext5Minutes = (date: Date) => {
+    const copy = new Date(date);
+    copy.setSeconds(0, 0);
+    const minute = copy.getMinutes();
+    const next = Math.ceil(minute / 5) * 5;
+    copy.setMinutes(next);
+    return copy;
+  };
+
+  const [formData, setFormData] = useState(() => {
+    const start = roundToNext5Minutes(new Date(Date.now() + 10 * 60 * 1000));
+    const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
+
+    return {
     title: "",
     description: "",
     lineup: "",
@@ -71,20 +86,33 @@ export default function CreateEventScreen() {
     address: "",
     lat: 46.0569,
     lng: 14.5058,
-    startsAt: new Date(),
-    endsAt: new Date(Date.now() + 3600000),
+    startsAt: start,
+    endsAt: end,
     genre: "electronic",
     ageLabel: "18+",
     priceType: "free",
     price: null as number | null,
     ticketUrl: "",
     status: "draft",
+  };
   });
 
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showStartTimePicker, setShowStartTimePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [showEndTimePicker, setShowEndTimePicker] = useState(false);
+
+  const pickerDisplay: "default" | "spinner" | "calendar" | "clock" =
+    Platform.OS === "ios" ? "spinner" : "default";
+
+  const ensureValidRange = (startsAt: Date, endsAt: Date) => {
+    const minStart = roundToNext5Minutes(new Date(Date.now() + 5 * 60 * 1000));
+    const safeStart = startsAt.getTime() < minStart.getTime() ? minStart : startsAt;
+    const safeEnd = endsAt.getTime() <= safeStart.getTime()
+      ? new Date(safeStart.getTime() + 2 * 60 * 60 * 1000)
+      : endsAt;
+    return { safeStart, safeEnd };
+  };
 
   // If admin, fetch list of organizers for selection
   // If organizer, set their own ID as the organizer
@@ -189,6 +217,25 @@ export default function CreateEventScreen() {
       return;
     }
 
+    const normalizedLineup = normalizeLineup(formData.lineup);
+    if (!normalizedLineup || !normalizedLineup.includes(",")) {
+      setToast({
+        visible: true,
+        message: "Lineup je obvezen in mora biti ločen z vejicami",
+        type: "error",
+      });
+      return;
+    }
+
+    if (formData.startsAt.getTime() <= Date.now()) {
+      setToast({
+        visible: true,
+        message: "Dogodka ni mogoče ustvariti v preteklosti",
+        type: "error",
+      });
+      return;
+    }
+
     if (formData.endsAt <= formData.startsAt) {
       setToast({
         visible: true,
@@ -248,7 +295,7 @@ export default function CreateEventScreen() {
           organizer_id: organizerId,
           title: formData.title,
           description: formData.description || null,
-          lineup: formData.lineup || null,
+          lineup: normalizedLineup,
           region: formData.region,
           city: formData.city,
           address: formData.address,
@@ -445,7 +492,7 @@ export default function CreateEventScreen() {
               <Text style={[styles.label, { color: theme.colors.text }]}>Lineup</Text>
               <TextInput
                 style={[styles.textArea, { color: theme.colors.text, borderColor: theme.colors.border }]}
-                placeholder="Lineup izvajalcev"
+                placeholder="npr. Artist A, Artist B, Artist C"
                 placeholderTextColor={Brand.textSecondary}
                 value={formData.lineup}
                 onChangeText={(text) => setFormData({ ...formData, lineup: text })}
@@ -535,22 +582,24 @@ export default function CreateEventScreen() {
                 <DateTimePicker
                   value={formData.startsAt}
                   mode="date"
-                  display="default"
+                  display={pickerDisplay}
+                  minimumDate={new Date()}
                   onChange={(event, date) => {
-                    setShowStartDatePicker(false);
-                    if (date) {
-                      setFormData((prev) => {
-                        const newStartsAt = new Date(prev.startsAt);
-                        newStartsAt.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
-
-                        let newEndsAt = prev.endsAt;
-                        if (newEndsAt.getTime() <= newStartsAt.getTime()) {
-                          newEndsAt = new Date(newStartsAt.getTime() + 2 * 60 * 60 * 1000);
-                        }
-
-                        return { ...prev, startsAt: newStartsAt, endsAt: newEndsAt };
-                      });
+                    if (Platform.OS === "android") {
+                      setShowStartDatePicker(false);
                     }
+                    if (event.type === "dismissed" || !date) {
+                      if (Platform.OS === "ios") setShowStartDatePicker(false);
+                      return;
+                    }
+
+                    setShowStartDatePicker(false);
+                    setFormData((prev) => {
+                      const newStartsAt = new Date(prev.startsAt);
+                      newStartsAt.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
+                      const { safeStart, safeEnd } = ensureValidRange(newStartsAt, prev.endsAt);
+                      return { ...prev, startsAt: safeStart, endsAt: safeEnd };
+                    });
                   }}
                 />
               )}
@@ -568,22 +617,24 @@ export default function CreateEventScreen() {
                 <DateTimePicker
                   value={formData.startsAt}
                   mode="time"
-                  display="default"
+                  display={pickerDisplay}
+                  minuteInterval={5}
                   onChange={(event, date) => {
-                    setShowStartTimePicker(false);
-                    if (date) {
-                      setFormData((prev) => {
-                        const newStartsAt = new Date(prev.startsAt);
-                        newStartsAt.setHours(date.getHours(), date.getMinutes(), 0, 0);
-
-                        let newEndsAt = prev.endsAt;
-                        if (newEndsAt.getTime() <= newStartsAt.getTime()) {
-                          newEndsAt = new Date(newStartsAt.getTime() + 2 * 60 * 60 * 1000);
-                        }
-
-                        return { ...prev, startsAt: newStartsAt, endsAt: newEndsAt };
-                      });
+                    if (Platform.OS === "android") {
+                      setShowStartTimePicker(false);
                     }
+                    if (event.type === "dismissed" || !date) {
+                      if (Platform.OS === "ios") setShowStartTimePicker(false);
+                      return;
+                    }
+
+                    setShowStartTimePicker(false);
+                    setFormData((prev) => {
+                      const newStartsAt = new Date(prev.startsAt);
+                      newStartsAt.setHours(date.getHours(), date.getMinutes(), 0, 0);
+                      const { safeStart, safeEnd } = ensureValidRange(newStartsAt, prev.endsAt);
+                      return { ...prev, startsAt: safeStart, endsAt: safeEnd };
+                    });
                   }}
                 />
               )}
@@ -601,20 +652,24 @@ export default function CreateEventScreen() {
                 <DateTimePicker
                   value={formData.endsAt}
                   mode="date"
-                  display="default"
+                  display={pickerDisplay}
+                  minimumDate={formData.startsAt}
                   onChange={(event, date) => {
-                    setShowEndDatePicker(false);
-                    if (date) {
-                      setFormData((prev) => {
-                        const newEndsAt = new Date(prev.endsAt);
-                        newEndsAt.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
-                        // Ensure end >= start
-                        if (newEndsAt.getTime() <= prev.startsAt.getTime()) {
-                          return { ...prev, endsAt: new Date(prev.startsAt.getTime() + 2 * 60 * 60 * 1000) };
-                        }
-                        return { ...prev, endsAt: newEndsAt };
-                      });
+                    if (Platform.OS === "android") {
+                      setShowEndDatePicker(false);
                     }
+                    if (event.type === "dismissed" || !date) {
+                      if (Platform.OS === "ios") setShowEndDatePicker(false);
+                      return;
+                    }
+
+                    setShowEndDatePicker(false);
+                    setFormData((prev) => {
+                      const newEndsAt = new Date(prev.endsAt);
+                      newEndsAt.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
+                      const { safeStart, safeEnd } = ensureValidRange(prev.startsAt, newEndsAt);
+                      return { ...prev, startsAt: safeStart, endsAt: safeEnd };
+                    });
                   }}
                 />
               )}
@@ -632,19 +687,24 @@ export default function CreateEventScreen() {
                 <DateTimePicker
                   value={formData.endsAt}
                   mode="time"
-                  display="default"
+                  display={pickerDisplay}
+                  minuteInterval={5}
                   onChange={(event, date) => {
-                    setShowEndTimePicker(false);
-                    if (date) {
-                      setFormData((prev) => {
-                        const newEndsAt = new Date(prev.endsAt);
-                        newEndsAt.setHours(date.getHours(), date.getMinutes(), 0, 0);
-                        if (newEndsAt.getTime() <= prev.startsAt.getTime()) {
-                          return { ...prev, endsAt: new Date(prev.startsAt.getTime() + 2 * 60 * 60 * 1000) };
-                        }
-                        return { ...prev, endsAt: newEndsAt };
-                      });
+                    if (Platform.OS === "android") {
+                      setShowEndTimePicker(false);
                     }
+                    if (event.type === "dismissed" || !date) {
+                      if (Platform.OS === "ios") setShowEndTimePicker(false);
+                      return;
+                    }
+
+                    setShowEndTimePicker(false);
+                    setFormData((prev) => {
+                      const newEndsAt = new Date(prev.endsAt);
+                      newEndsAt.setHours(date.getHours(), date.getMinutes(), 0, 0);
+                      const { safeStart, safeEnd } = ensureValidRange(prev.startsAt, newEndsAt);
+                      return { ...prev, startsAt: safeStart, endsAt: safeEnd };
+                    });
                   }}
                 />
               )}
@@ -684,7 +744,7 @@ export default function CreateEventScreen() {
                   <Text
                     style={[
                       styles.priceTypeText,
-                      { color: formData.priceType === "free" ? Brand.primaryGradientStart : theme.colors.text },
+                      { color: formData.priceType === "free" ? Brand.textPrimary : theme.colors.text },
                     ]}
                   >
                     Brezplačno
@@ -700,7 +760,7 @@ export default function CreateEventScreen() {
                   <Text
                     style={[
                       styles.priceTypeText,
-                      { color: formData.priceType === "paid" ? Brand.primaryGradientStart : theme.colors.text },
+                      { color: formData.priceType === "paid" ? Brand.textPrimary : theme.colors.text },
                     ]}
                   >
                     Plačljivo
@@ -746,7 +806,7 @@ export default function CreateEventScreen() {
                   <Text
                     style={[
                       styles.priceTypeText,
-                      { color: formData.status === "draft" ? Brand.primaryGradientStart : theme.colors.text },
+                      { color: formData.status === "draft" ? Brand.textPrimary : theme.colors.text },
                     ]}
                   >
                     Osnutek
@@ -762,7 +822,7 @@ export default function CreateEventScreen() {
                   <Text
                     style={[
                       styles.priceTypeText,
-                      { color: formData.status === "published" ? Brand.primaryGradientStart : theme.colors.text },
+                      { color: formData.status === "published" ? Brand.textPrimary : theme.colors.text },
                     ]}
                   >
                     Objavljeno
@@ -770,16 +830,19 @@ export default function CreateEventScreen() {
                 </TouchableOpacity>
               </View>
 
-              <TouchableOpacity
-                style={[styles.createButton, { backgroundColor: theme.colors.primary }]}
-                onPress={handleCreate}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color={Brand.primaryGradientStart} />
-                ) : (
-                  <Text style={[styles.createButtonText, { color: Brand.primaryGradientStart }]}>Ustvari dogodek</Text>
-                )}
+              <TouchableOpacity style={styles.createButton} onPress={handleCreate} disabled={loading}>
+                <LinearGradient
+                  colors={[Brand.secondaryGradientEnd, Brand.accentOrange]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.createButtonGradient}
+                >
+                  {loading ? (
+                    <ActivityIndicator color={Brand.textPrimary} />
+                  ) : (
+                    <Text style={styles.createButtonText}>Ustvari dogodek</Text>
+                  )}
+                </LinearGradient>
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -889,8 +952,7 @@ const styles = StyleSheet.create({
   createButton: {
     height: 50,
     borderRadius: 16, // Pill shape (14-18px)
-    justifyContent: "center",
-    alignItems: "center",
+    overflow: "hidden",
     marginTop: 16,
     shadowColor: Brand.glowOrange,
     shadowOffset: { width: 0, height: 4 },
@@ -898,9 +960,15 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
+  createButtonGradient: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   createButtonText: {
     fontSize: 16,
     fontWeight: "600",
+    color: Brand.textPrimary,
   },
   posterPreview: {
     width: "100%",

@@ -107,6 +107,10 @@ const getLogServerUrl = (): string | null => {
 // Track if we've logged fetch errors to avoid spam
 let fetchErrorLogged = false;
 
+type LoggerGlobal = typeof globalThis & {
+  __KJEDOGAJA_ERROR_LOGGER_INITIALIZED__?: boolean;
+};
+
 // Flush the log queue to server
 const flushLogs = async () => {
   if (logQueue.length === 0) return;
@@ -128,13 +132,11 @@ const flushLogs = async () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(log),
       }).catch((e) => {
-        // Log fetch errors only once to avoid spam
+        // Mark once to avoid repeated rejected-promise work when endpoint is unavailable.
+        // Avoid any console logging here because console is intercepted by this same module,
+        // which can create recursive logging loops in development.
         if (!fetchErrorLogged) {
           fetchErrorLogged = true;
-          // Use a different method to avoid recursion - write directly without going through our intercept
-          if (typeof window !== 'undefined' && window.console) {
-            (window.console as any).__proto__.log.call(console, '[Natively] Fetch error (will not repeat):', e.message || e);
-          }
         }
       });
     } catch (e) {
@@ -295,6 +297,12 @@ export const setupErrorLogging = () => {
   if (!__DEV__) {
     return;
   }
+
+  const globalRef = globalThis as LoggerGlobal;
+  if (globalRef.__KJEDOGAJA_ERROR_LOGGER_INITIALIZED__) {
+    return;
+  }
+  globalRef.__KJEDOGAJA_ERROR_LOGGER_INITIALIZED__ = true;
 
   // Store original console methods BEFORE any modifications
   const originalConsoleLog = console.log;

@@ -25,11 +25,14 @@ import { supabase } from "@/app/integrations/supabase/client";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { resolveStorageUrl } from "@/utils/storage";
 import { CITY_FALLBACK_COORDS, normalizeCityKey, resolveEventCoords } from "@/utils/geo";
+import { EventFeedCard } from "@/components/EventFeedCard";
+import { parseRouteParam, isLikelyUuid } from "@/utils/validation";
 
 interface Event {
   id: string;
   title: string;
   description: string;
+  lineup?: string | null;
   poster_url: string | null;
   region: string;
   city: string;
@@ -73,6 +76,7 @@ export default function HomeScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { organizerId } = useLocalSearchParams<{ organizerId?: string }>();
+  const organizerFilterId = parseRouteParam(organizerId);
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -212,9 +216,8 @@ export default function HomeScreen() {
       }
 
       const now = new Date().toISOString();
-      const organizerFilterId = typeof organizerId === 'string' ? organizerId : undefined;
 
-      if (organizerFilterId) {
+      if (organizerFilterId && isLikelyUuid(organizerFilterId)) {
         console.log("[Feed] Fetching published events for organizer:", organizerFilterId);
       } else {
         console.log("[Feed] Fetching published upcoming events (ends_at >=", now, ")");
@@ -227,7 +230,7 @@ export default function HomeScreen() {
 
       // Default feed: only events that haven't ended yet.
       // Organizer-filtered feed: show ALL published events for that organizer.
-      if (organizerFilterId) {
+      if (organizerFilterId && isLikelyUuid(organizerFilterId)) {
         query = query.eq('organizer_id', organizerFilterId).order('starts_at', { ascending: false });
       } else {
         query = query.gte("ends_at", now).order("starts_at", { ascending: true });
@@ -236,7 +239,7 @@ export default function HomeScreen() {
       query = (query as any).abortSignal(abortControllerRef.current.signal);
 
       // Only apply interactive filters on the main feed.
-      if (!organizerFilterId) {
+      if (!(organizerFilterId && isLikelyUuid(organizerFilterId))) {
         if (selectedRegion) {
           query = query.eq("region", selectedRegion);
         }
@@ -305,7 +308,7 @@ export default function HomeScreen() {
       setRefreshing(false);
       isFetchingRef.current = false;
     }
-  }, [location, selectedRegion, selectedGenre, searchQuery, calculateDistance, refreshing, organizerId]);
+  }, [location, selectedRegion, selectedGenre, searchQuery, calculateDistance, refreshing, organizerFilterId]);
 
   useEffect(() => {
     loadLocation();
@@ -353,110 +356,32 @@ export default function HomeScreen() {
       return null;
     }
 
-    const startsAtDate = new Date(item.starts_at);
-    const dateDisplay = startsAtDate.toLocaleDateString("sl-SI", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-    
     const cityText = item.city || "Neznano mesto";
     const distanceText = item.distance ? `${item.distance.toFixed(1)} km` : "";
-    const priceText = item.price_type === "free" ? "Brezplačno" : `€${item.price || 0}`;
     
     const timeLabel = getTimeLabel(item.starts_at);
-    const isCancelled = item.status === "cancelled";
-    const isLive = item.status === "published";
 
     return (
       <Animated.View entering={FadeInDown.duration(300).delay(100)}>
-        <TouchableOpacity
-          style={[styles.eventCard, { backgroundColor: Brand.surfaceDark, borderColor: Brand.borderSubtle, borderWidth: 1 }]} // Event card background
-          onPress={() => handleEventPress(item.id)}
-          activeOpacity={0.7}
-        >
-        {item.poster_url && (
-          <Image source={{ uri: item.poster_url }} style={styles.eventImage} />
-        )}
-        <View style={styles.eventContent}>
-          <View style={styles.eventHeader}>
-            <Text style={[styles.eventTitle, { color: Brand.textPrimary }]} numberOfLines={2}>
-              {item.title}
-            </Text>
-            {timeLabel && (
-              <View style={[styles.badge, { backgroundColor: Brand.secondaryGradientEnd }]}>
-                <Text style={styles.badgeText}>{timeLabel}</Text>
-              </View>
-            )}
-            {isCancelled && (
-              <View style={[styles.badge, styles.cancelledBadge, { backgroundColor: Brand.surfaceMuted }]}>
-                <Text style={[styles.badgeText, { color: Brand.textSecondary }]}>PREKLICANO</Text>
-              </View>
-            )}
-          </View>
-
-          <View style={styles.eventMeta}>
-            <View style={styles.metaRow}>
-              <IconSymbol
-                ios_icon_name="calendar"
-                android_material_icon_name="event"
-                size={16}
-                color={Brand.secondaryGradientEnd}
-              />
-              <Text style={[styles.metaText, { color: Brand.textSecondary }]}>
-                {dateDisplay}
-              </Text>
-            </View>
-
-            <View style={styles.metaRow}>
-              <IconSymbol
-                ios_icon_name="music.note"
-                android_material_icon_name="music-note"
-                size={16}
-                color={Brand.secondaryGradientEnd}
-              />
-              <Text style={[styles.metaText, { color: Brand.textSecondary }]}>
-                {item.genre}
-              </Text>
-            </View>
-
-            <View style={styles.metaRow}>
-              <IconSymbol
-                ios_icon_name="ticket"
-                android_material_icon_name="confirmation-number"
-                size={16}
-                color={Brand.secondaryGradientEnd}
-              />
-              <Text style={[styles.metaText, { color: Brand.textSecondary }]}>
-                {priceText}
-              </Text>
-            </View>
-
-            <View style={styles.metaRow}>
-              <IconSymbol
-                ios_icon_name="location"
-                android_material_icon_name="location-on"
-                size={16}
-                color={Brand.highlightYellow}
-              />
-              <Text style={[styles.metaText, { color: Brand.textPrimary }]}>
-                {cityText}
-              </Text>
-              {distanceText && (
-                <>
-                  <Text style={[styles.metaText, { color: Brand.textSecondary, marginHorizontal: 4 }]}>
-                    •
-                  </Text>
-                  <Text style={[styles.metaText, { color: Brand.textPrimary }]}>
-                    {distanceText}
-                  </Text>
-                </>
-              )}
-            </View>
-          </View>
-        </View>
-      </TouchableOpacity>
+        <EventFeedCard
+          id={item.id}
+          title={item.title}
+          posterUrl={item.poster_url}
+          startsAt={item.starts_at}
+          lineup={item.lineup}
+          genre={item.genre}
+          priceType={item.price_type}
+          price={item.price}
+          city={cityText}
+          badgeText={timeLabel || null}
+          onPress={handleEventPress}
+          rightMeta={distanceText ? (
+            <>
+              <Text style={[styles.metaText, { color: Brand.textSecondary, marginHorizontal: 4 }]}>•</Text>
+              <Text style={[styles.metaText, { color: Brand.textPrimary }]}>{distanceText}</Text>
+            </>
+          ) : null}
+        />
       </Animated.View>
     );
   }, [handleEventPress, getTimeLabel]);
@@ -495,11 +420,11 @@ export default function HomeScreen() {
               <TouchableOpacity
                 style={[
                   styles.filterChip,
-                  !selectedGenre && { backgroundColor: Brand.accentOrange },
+                  !selectedGenre && { backgroundColor: Brand.secondaryGradientEnd },
                 ]}
                 onPress={() => setSelectedGenre("")}
               >
-                <Text style={[styles.filterChipText, { color: !selectedGenre ? Brand.primaryGradientStart : Brand.textPrimary }]}>
+                <Text style={[styles.filterChipText, { color: Brand.textPrimary }]}>
                   Vsi
                 </Text>
               </TouchableOpacity>
@@ -508,14 +433,14 @@ export default function HomeScreen() {
                   key={genre}
                   style={[
                     styles.filterChip,
-                    selectedGenre === genre && { backgroundColor: Brand.accentOrange },
+                    selectedGenre === genre && { backgroundColor: Brand.secondaryGradientEnd },
                   ]}
                   onPress={() => setSelectedGenre(genre)}
                 >
                   <Text
                     style={[
                       styles.filterChipText,
-                      { color: selectedGenre === genre ? Brand.primaryGradientStart : Brand.textPrimary },
+                      { color: Brand.textPrimary },
                     ]}
                   >
                     {genre}
@@ -529,11 +454,11 @@ export default function HomeScreen() {
               <TouchableOpacity
                 style={[
                   styles.filterChip,
-                  !selectedRegion && { backgroundColor: Brand.accentOrange },
+                  !selectedRegion && { backgroundColor: Brand.secondaryGradientEnd },
                 ]}
                 onPress={() => setSelectedRegion("")}
               >
-                <Text style={[styles.filterChipText, { color: !selectedRegion ? Brand.primaryGradientStart : Brand.textPrimary }]}>
+                <Text style={[styles.filterChipText, { color: Brand.textPrimary }]}>
                   Vse
                 </Text>
               </TouchableOpacity>
@@ -542,14 +467,14 @@ export default function HomeScreen() {
                   key={region}
                   style={[
                     styles.filterChip,
-                    selectedRegion === region && { backgroundColor: Brand.accentOrange },
+                    selectedRegion === region && { backgroundColor: Brand.secondaryGradientEnd },
                   ]}
                   onPress={() => setSelectedRegion(region)}
                 >
                   <Text
                     style={[
                       styles.filterChipText,
-                      { color: selectedRegion === region ? Brand.primaryGradientStart : Brand.textPrimary },
+                      { color: Brand.textPrimary },
                     ]}
                   >
                     {region}
@@ -611,6 +536,10 @@ export default function HomeScreen() {
                 </Text>
               </View>
             }
+            initialNumToRender={8}
+            maxToRenderPerBatch={8}
+            windowSize={7}
+            removeClippedSubviews
           />
         )}
       </Screen>
@@ -675,56 +604,6 @@ const styles = StyleSheet.create({
   },
   listContentWithTabBar: {
     paddingBottom: 100,
-  },
-  eventCard: {
-    borderRadius: 16,
-    marginBottom: 16,
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  eventImage: {
-    width: "100%",
-    height: 200,
-  },
-  eventContent: {
-    padding: 16,
-  },
-  eventHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 12,
-  },
-  eventTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    flex: 1,
-    marginRight: 8,
-  },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  cancelledBadge: {
-    // backgroundColor set dynamically
-  },
-  badgeText: {
-    color: "#fff",
-    fontSize: 10,
-    fontWeight: "bold",
-  },
-  eventMeta: {
-    gap: 8,
-  },
-  metaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
   },
   metaText: {
     fontSize: 14,

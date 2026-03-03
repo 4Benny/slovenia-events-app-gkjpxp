@@ -27,6 +27,7 @@ import * as Brand from "@/constants/Colors";
 import { cancelGoingReminders, scheduleGoingReminders } from "@/utils/notifications";
 import { extractStoragePath, resolveStorageUrl } from "@/utils/storage";
 import { resolveEventCoords } from "@/utils/geo";
+import { isLikelyUuid, parseRouteParam } from "@/utils/validation";
 
 interface EventDetail {
   id: string;
@@ -78,6 +79,7 @@ interface EventImage {
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams();
+  const eventId = parseRouteParam(id as any);
   const router = useRouter();
   const theme = useTheme();
   const { user, userRole } = useAuth();
@@ -93,6 +95,7 @@ export default function EventDetailScreen() {
   const [images, setImages] = useState<EventImage[]>([]);
   const [newComment, setNewComment] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [userImageCount, setUserImageCount] = useState(0);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [error, setError] = useState<{ title: string; message: string } | null>(null);
@@ -110,12 +113,18 @@ export default function EventDetailScreen() {
     new RNAnimated.Value(1),
     new RNAnimated.Value(1),
   ]);
-
   useEffect(() => {
     let abortController: AbortController | null = null;
 
     const fetchEventDetail = async () => {
-      if (!id) {
+      if (!eventId) {
+        setError({ title: "Neveljaven dogodek", message: "Manjka ID dogodka." });
+        setLoading(false);
+        return;
+      }
+
+      if (!isLikelyUuid(eventId)) {
+        setError({ title: "Neveljaven dogodek", message: "ID dogodka ni veljaven." });
         setLoading(false);
         return;
       }
@@ -124,12 +133,12 @@ export default function EventDetailScreen() {
 
       try {
         setLoading(true);
-        console.log("[Event Detail] Fetching event:", id);
+        console.log("[Event Detail] Fetching event:", eventId);
 
         let query = supabase
           .from("events")
           .select("*")
-          .eq("id", id)
+          .eq("id", eventId)
           .single();
 
         query = (query as any).abortSignal(abortController.signal);
@@ -168,7 +177,7 @@ export default function EventDetailScreen() {
           const { data: goingData, error: goingError } = await supabase
             .from("event_going")
             .select("id")
-            .eq("event_id", id)
+            .eq("event_id", eventId)
             .eq("user_id", user.id)
             .maybeSingle();
 
@@ -180,7 +189,7 @@ export default function EventDetailScreen() {
           const { data: ratingData, error: ratingError } = await supabase
             .from("event_ratings")
             .select("rating")
-            .eq("event_id", id)
+            .eq("event_id", eventId)
             .eq("user_id", user.id)
             .maybeSingle();
 
@@ -192,7 +201,7 @@ export default function EventDetailScreen() {
           const { count: imageCount, error: imageCountError } = await supabase
             .from("event_images")
             .select("*", { count: "exact", head: true })
-            .eq("event_id", id)
+            .eq("event_id", eventId)
             .eq("user_id", user.id);
 
           if (!imageCountError) {
@@ -204,7 +213,7 @@ export default function EventDetailScreen() {
         const { count, error: countError } = await supabase
           .from("event_going")
           .select("*", { count: "exact", head: true })
-          .eq("event_id", id);
+          .eq("event_id", eventId);
 
         if (!countError) {
           setGoingCount(count || 0);
@@ -214,7 +223,7 @@ export default function EventDetailScreen() {
         const { data: ratingsData, error: ratingsError } = await supabase
           .from("event_ratings")
           .select("rating")
-          .eq("event_id", id);
+          .eq("event_id", eventId);
 
         if (!ratingsError && ratingsData && ratingsData.length > 0) {
           const sum = ratingsData.reduce((acc, r) => acc + Number(r.rating), 0);
@@ -234,7 +243,7 @@ export default function EventDetailScreen() {
               avatar_url
             )
           `)
-          .eq("event_id", id)
+          .eq("event_id", eventId)
           .order("created_at", { ascending: false });
 
         if (!commentsError && commentsData) {
@@ -253,7 +262,7 @@ export default function EventDetailScreen() {
               username
             )
           `)
-          .eq("event_id", id)
+          .eq("event_id", eventId)
           .order("created_at", { ascending: false });
 
         if (!imagesError && imagesData) {
@@ -290,7 +299,7 @@ export default function EventDetailScreen() {
         abortController.abort();
       }
     };
-  }, [id, user]);
+  }, [eventId, user]);
 
   const requestNotificationPermission = async () => {
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
@@ -345,7 +354,7 @@ export default function EventDetailScreen() {
         const { error: deleteError } = await supabase
           .from("event_going")
           .delete()
-          .eq("event_id", id)
+          .eq("event_id", eventId)
           .eq("user_id", user.id);
 
         if (deleteError) {
@@ -353,9 +362,9 @@ export default function EventDetailScreen() {
         }
 
         setIsGoing(false);
-        setGoingCount(goingCount - 1);
+        setGoingCount((prev) => Math.max(0, prev - 1));
 
-        await cancelGoingReminders(id as string);
+        await cancelGoingReminders(eventId);
 
         setToast({
           visible: true,
@@ -378,7 +387,7 @@ export default function EventDetailScreen() {
         const { error: insertError } = await supabase
           .from("event_going")
           .insert({
-            event_id: id as string,
+            event_id: eventId,
             user_id: user.id,
           });
 
@@ -387,11 +396,11 @@ export default function EventDetailScreen() {
         }
 
         setIsGoing(true);
-        setGoingCount(goingCount + 1);
+        setGoingCount((prev) => prev + 1);
 
         if (hasPermission) {
           await scheduleGoingReminders({
-            eventId: id as string,
+            eventId,
             eventTitle: event.title,
             startsAtISO: event.starts_at,
           });
@@ -400,7 +409,7 @@ export default function EventDetailScreen() {
         setToast({
           visible: true,
           message: hasPermission 
-            ? "Dodano v vaše dogodke. Prejeli boste opomnik 1 dan in 3 ure pred dogodkom." 
+            ? "Dodano v vaše dogodke. Prejeli boste opomnik 3 dni in 1 uro pred dogodkom." 
             : "Dodano v vaše dogodke.",
           type: "success",
         });
@@ -462,11 +471,9 @@ export default function EventDetailScreen() {
       return;
     }
 
-    // Check if event has ended and within 7 days
+    // Rating is only allowed for past events where user marked going
     const now = new Date();
     const eventEnd = new Date(event.ends_at);
-    const sevenDaysAfter = new Date(eventEnd);
-    sevenDaysAfter.setDate(sevenDaysAfter.getDate() + 7);
 
     if (now < eventEnd) {
       setToast({
@@ -477,20 +484,11 @@ export default function EventDetailScreen() {
       return;
     }
 
-    if (now > sevenDaysAfter) {
-      setToast({
-        visible: true,
-        message: "Ocenjevanje je možno samo 7 dni po dogodku",
-        type: "error",
-      });
-      return;
-    }
-
     // Check if user was going to the event
     const { data: goingData, error: goingError } = await supabase
       .from("event_going")
       .select("id")
-      .eq("event_id", id)
+      .eq("event_id", eventId)
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -511,7 +509,7 @@ export default function EventDetailScreen() {
       const { error: insertError } = await supabase
         .from("event_ratings")
         .insert({
-          event_id: id as string,
+          event_id: eventId,
           user_id: user.id,
           rating: rating,
         });
@@ -526,7 +524,7 @@ export default function EventDetailScreen() {
       const { data: ratingsData, error: ratingsError } = await supabase
         .from("event_ratings")
         .select("rating")
-        .eq("event_id", id);
+        .eq("event_id", eventId);
 
       if (!ratingsError && ratingsData && ratingsData.length > 0) {
         const sum = ratingsData.reduce((acc, r) => acc + Number(r.rating), 0);
@@ -569,7 +567,7 @@ export default function EventDetailScreen() {
     const { data: goingData, error: goingError } = await supabase
       .from("event_going")
       .select("id")
-      .eq("event_id", id)
+      .eq("event_id", eventId)
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -582,11 +580,9 @@ export default function EventDetailScreen() {
       return;
     }
 
-    // Check if event has ended and within 7 days
+    // Comments are only allowed for past events where user marked going
     const now = new Date();
     const eventEnd = new Date(event.ends_at);
-    const sevenDaysAfter = new Date(eventEnd);
-    sevenDaysAfter.setDate(sevenDaysAfter.getDate() + 7);
 
     if (now < eventEnd) {
       setToast({
@@ -597,21 +593,12 @@ export default function EventDetailScreen() {
       return;
     }
 
-    if (now > sevenDaysAfter) {
-      setToast({
-        visible: true,
-        message: "Komentiranje je možno samo 7 dni po dogodku",
-        type: "error",
-      });
-      return;
-    }
-
     try {
       // FIXED: using 'content' column instead of 'body'
       const { data, error: insertError } = await supabase
         .from("event_comments")
         .insert({
-          event_id: id as string,
+          event_id: eventId,
           user_id: user.id,
           content: newComment.trim(),
         })
@@ -711,7 +698,7 @@ export default function EventDetailScreen() {
     const { data: goingData, error: goingError } = await supabase
       .from("event_going")
       .select("id")
-      .eq("event_id", id)
+      .eq("event_id", eventId)
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -724,25 +711,14 @@ export default function EventDetailScreen() {
       return;
     }
 
-    // Check if event has ended and within 7 days
+    // Gallery is only allowed for past events where user marked going
     const now = new Date();
     const eventEnd = new Date(event.ends_at);
-    const sevenDaysAfter = new Date(eventEnd);
-    sevenDaysAfter.setDate(sevenDaysAfter.getDate() + 7);
 
     if (now < eventEnd) {
       setToast({
         visible: true,
         message: "Slike lahko naložite šele po koncu dogodka",
-        type: "error",
-      });
-      return;
-    }
-
-    if (now > sevenDaysAfter) {
-      setToast({
-        visible: true,
-        message: "Nalaganje slik je možno samo 7 dni po dogodku",
         type: "error",
       });
       return;
@@ -773,15 +749,17 @@ export default function EventDetailScreen() {
       }
 
       setUploadingImage(true);
+      setUploadProgress(20);
 
       const image = result.assets[0];
-      const filePath = `${id}/${user.id}/${Date.now()}.jpg`;
+      const filePath = `${eventId}/${user.id}/${Date.now()}.jpg`;
 
       const mime = image.mimeType || "image/jpeg";
       const sourceUri = image.base64
         ? `data:${mime};base64,${image.base64}`
         : image.uri;
       const arrayBuffer = await (await fetch(sourceUri)).arrayBuffer();
+      setUploadProgress(60);
 
       const { error: uploadError } = await supabase.storage
         .from("event-images")
@@ -793,13 +771,14 @@ export default function EventDetailScreen() {
       if (uploadError) {
         throw uploadError;
       }
+      setUploadProgress(90);
 
       const publicUrl = supabase.storage.from("event-images").getPublicUrl(filePath).data.publicUrl;
 
       const { data, error: insertError } = await supabase
         .from("event_images")
         .insert({
-          event_id: id as string,
+          event_id: eventId,
           user_id: user.id,
           // Store public URL for consistency with older rows.
           image_url: publicUrl,
@@ -822,6 +801,7 @@ export default function EventDetailScreen() {
       const resolvedUrl = await resolveStorageUrl({ bucket: "event-images", value: (data as any)?.image_url });
       setImages((prev) => [{ ...(data as any), image_path: filePath, image_url: resolvedUrl } as any, ...prev]);
       setUserImageCount((prev) => prev + 1);
+      setUploadProgress(100);
       setToast({
         visible: true,
         message: "Slika naložena",
@@ -836,6 +816,7 @@ export default function EventDetailScreen() {
       });
     } finally {
       setUploadingImage(false);
+      setUploadProgress(0);
     }
   };
 
@@ -907,7 +888,8 @@ export default function EventDetailScreen() {
       showLoginRequiredModal();
       return;
     }
-    router.push(`/event/attendees/${id}` as any);
+    if (!eventId) return;
+    router.push(`/event/attendees/${eventId}` as any);
   };
 
   const handleViewOrganizer = () => {
@@ -993,9 +975,8 @@ export default function EventDetailScreen() {
   const isCancelled = event.status === "cancelled";
   const hasEnded = now > endsAtDate;
   const isOngoing = now >= startsAtDate && now <= endsAtDate;
-  const sevenDaysAfterEnd = new Date(endsAtDate);
-  sevenDaysAfterEnd.setDate(sevenDaysAfterEnd.getDate() + 7);
-  const canInteract = hasEnded && now <= sevenDaysAfterEnd;
+  const canInteract = hasEnded && isGoing;
+  const venueDisplay = (event.address || "").split(",")[0]?.trim() || "Neznano prizorišče";
 
   const goingButtonText = isGoing ? "Ne Grem" : "Grem";
   const goingButtonDisabled = isGoing && now >= startsAtDate;
@@ -1113,6 +1094,30 @@ export default function EventDetailScreen() {
                 </Text>
               </View>
 
+              <View style={styles.metaRow}>
+                <IconSymbol
+                  ios_icon_name="location"
+                  android_material_icon_name="location-on"
+                  size={20}
+                  color={Brand.highlightYellow}
+                />
+                <Text style={[styles.metaText, { color: theme.colors.text }]}>
+                  {event.city || "Neznano mesto"}
+                </Text>
+              </View>
+
+              <View style={styles.metaRow}>
+                <IconSymbol
+                  ios_icon_name="building.2"
+                  android_material_icon_name="storefront"
+                  size={20}
+                  color={Brand.secondaryGradientEnd}
+                />
+                <Text style={[styles.metaText, { color: theme.colors.text }]}>
+                  {venueDisplay}
+                </Text>
+              </View>
+
               <TouchableOpacity style={styles.metaRow} onPress={openMaps}>
                 <IconSymbol
                   ios_icon_name="location.fill"
@@ -1121,7 +1126,7 @@ export default function EventDetailScreen() {
                   color={Brand.highlightYellow}
                 />
                 <Text style={[styles.metaText, { color: theme.colors.primary }]}>
-                  {event.address}
+                  {event.address || "Naslov ni na voljo"}
                 </Text>
               </TouchableOpacity>
 
@@ -1134,6 +1139,18 @@ export default function EventDetailScreen() {
                 />
                 <Text style={[styles.metaText, { color: theme.colors.text }]}>
                   {event.genre}
+                </Text>
+              </View>
+
+              <View style={styles.metaRow}>
+                <IconSymbol
+                  ios_icon_name="music.note.list"
+                  android_material_icon_name="queue-music"
+                  size={20}
+                  color={Brand.secondaryGradientEnd}
+                />
+                <Text style={[styles.metaText, { color: theme.colors.text, flex: 1 }]}>
+                  {event.lineup || "Lineup ni naveden"}
                 </Text>
               </View>
 
@@ -1310,7 +1327,10 @@ export default function EventDetailScreen() {
                       disabled={uploadingImage}
                     >
                       {uploadingImage ? (
-                        <ActivityIndicator color={theme.colors.primary} />
+                        <View style={styles.uploadProgressWrap}>
+                          <ActivityIndicator color={theme.colors.primary} />
+                          <Text style={[styles.uploadProgressText, { color: theme.colors.primary }]}>{uploadProgress}%</Text>
+                        </View>
                       ) : (
                         <>
                           <IconSymbol
@@ -1644,6 +1664,15 @@ const styles = StyleSheet.create({
   },
   uploadButtonText: {
     fontSize: 16,
+    fontWeight: "600",
+  },
+  uploadProgressWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  uploadProgressText: {
+    fontSize: 14,
     fontWeight: "600",
   },
   commentInputContainer: {

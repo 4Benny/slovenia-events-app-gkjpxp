@@ -20,6 +20,7 @@ import { Modal } from "@/components/ui/Modal";
 import * as Notifications from "expo-notifications";
 import * as Brand from "@/constants/Colors";
 import { InstagramIcon, SnapchatIcon } from "@/components/SocialIcons";
+import { isLikelyUuid, parseRouteParam } from "@/utils/validation";
 
 interface OrganizerProfile {
   id: string;
@@ -37,7 +38,7 @@ export default function OrganizerProfileScreen() {
   const router = useRouter();
   const theme = useTheme();
   const { user } = useAuth();
-  const organizerId = Array.isArray(id) ? id[0] : id;
+  const organizerId = parseRouteParam(id as any);
   const [profile, setProfile] = useState<OrganizerProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isFollowing, setIsFollowing] = useState(false);
@@ -53,6 +54,13 @@ export default function OrganizerProfileScreen() {
   useEffect(() => {
     const fetchProfile = async () => {
       if (!organizerId) {
+        setToast({ visible: true, message: "Neveljaven organizator", type: "error" });
+        setLoading(false);
+        return;
+      }
+
+      if (!isLikelyUuid(organizerId)) {
+        setToast({ visible: true, message: "Neveljaven ID organizatorja", type: "error" });
         setLoading(false);
         return;
       }

@@ -23,6 +23,7 @@ import { Screen } from "@/components/ui/Screen";
 import * as Brand from "@/constants/Colors";
 import { authenticatedDelete, isBackendConfigured } from "@/utils/api";
 import { resolveStorageUrl } from "@/utils/storage";
+import { LinearGradient } from "expo-linear-gradient";
 
 interface OrganizerEvent {
   id: string;
@@ -178,10 +179,10 @@ export default function OrganizerScreen() {
     }
   }, [user, userRole, refreshing, isAbortLikeError]);
 
-  const hasEventEnded = useCallback((eventLike: { ends_at?: string | null } | null | undefined) => {
-    const endsAt = eventLike?.ends_at;
-    if (!endsAt) return false;
-    const t = new Date(endsAt).getTime();
+  const hasEventStarted = useCallback((eventLike: { starts_at?: string | null } | null | undefined) => {
+    const startsAt = eventLike?.starts_at;
+    if (!startsAt) return false;
+    const t = new Date(startsAt).getTime();
     if (!Number.isFinite(t)) return false;
     return t < Date.now();
   }, []);
@@ -201,7 +202,7 @@ export default function OrganizerScreen() {
 
     const eventToDelete = events.find((e) => e.id === eventId);
     if (userRole !== 'admin') {
-      if (hasEventEnded(eventToDelete)) {
+      if (hasEventStarted(eventToDelete as any)) {
         setDeleteConfirm(null);
         return;
       }
@@ -210,11 +211,11 @@ export default function OrganizerScreen() {
       if (!eventToDelete) {
         const { data: eventRow, error: eventRowError } = await supabase
           .from('events')
-          .select('ends_at')
+          .select('starts_at')
           .eq('id', eventId)
           .maybeSingle();
 
-        if (!eventRowError && hasEventEnded(eventRow as any)) {
+        if (!eventRowError && hasEventStarted(eventRow as any)) {
           setDeleteConfirm(null);
           return;
         }
@@ -299,7 +300,7 @@ export default function OrganizerScreen() {
     } finally {
       setDeleteConfirm(null);
     }
-  }, [user, userRole, events, hasEventEnded]);
+  }, [user, userRole, events, hasEventStarted]);
 
   // Render event - ALWAYS define at top level
   const renderEvent = useCallback(({ item, index }: { item: OrganizerEvent; index: number }) => {
@@ -323,7 +324,7 @@ export default function OrganizerScreen() {
     const regionText = item.region || "Neznana regija";
     const priceText = item.price_type === "free" ? "Brezplačno" : `€${item.price || 0}`;
     const bulletText = "•";
-    const isEnded = userRole !== 'admin' && hasEventEnded(item);
+    const hasStarted = userRole !== 'admin' && hasEventStarted(item as any);
 
     return (
       <Animated.View entering={FadeInDown.duration(300).delay(index * 50)}>
@@ -417,11 +418,11 @@ export default function OrganizerScreen() {
               style={[
                 styles.actionButton,
                 { borderColor: Brand.secondaryGradientStart },
-                isEnded ? { opacity: 0.5 } : null,
+                hasStarted ? { opacity: 0.5 } : null,
               ]}
-              disabled={isEnded}
+              disabled={hasStarted}
               onPress={() => {
-                if (isEnded) return;
+                if (hasStarted) return;
                 router.push(`/organizer/edit/${item.id}` as any);
               }}
             >
@@ -440,12 +441,12 @@ export default function OrganizerScreen() {
               style={[
                 styles.actionButton,
                 { borderColor: Brand.dangerRed },
-                isEnded ? { opacity: 0.5 } : null,
+                hasStarted ? { opacity: 0.5 } : null,
               ]}
-              disabled={isEnded}
+              disabled={hasStarted}
               onPress={() => {
                 console.log("[Organizer Screen] Delete button pressed for event:", item.id);
-                if (isEnded) return;
+                if (hasStarted) return;
                 setDeleteConfirm(item.id);
               }}
             >
@@ -464,7 +465,7 @@ export default function OrganizerScreen() {
       </TouchableOpacity>
       </Animated.View>
     );
-  }, [router, userRole, hasEventEnded]);
+  }, [router, userRole, hasEventStarted]);
 
   // Refresh callback - ALWAYS define at top level
   const onRefresh = useCallback(() => {
@@ -600,15 +601,22 @@ export default function OrganizerScreen() {
       />
 
       <TouchableOpacity
-        style={[styles.fab, { backgroundColor: theme.colors.primary, marginBottom:30}]}
+        style={[styles.fab, { marginBottom: 30 }]}
         onPress={() => router.push("/organizer/create" as any)}
       >
-        <IconSymbol
-          ios_icon_name="plus"
-          android_material_icon_name="add"
-          size={28}
-          color={Brand.primaryGradientStart}
-        />
+        <LinearGradient
+          colors={[Brand.secondaryGradientEnd, Brand.accentOrange]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.fabGradient}
+        >
+          <IconSymbol
+            ios_icon_name="plus"
+            android_material_icon_name="add"
+            size={28}
+            color={Brand.textPrimary}
+          />
+        </LinearGradient>
       </TouchableOpacity>
     </Screen>
   );
@@ -748,12 +756,16 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    justifyContent: "center",
-    alignItems: "center",
+    overflow: "hidden",
     shadowColor: Brand.glowOrange,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 8,
     elevation: 8,
+  },
+  fabGradient: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
 });

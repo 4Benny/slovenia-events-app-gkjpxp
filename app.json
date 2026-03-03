@@ -4,7 +4,7 @@
     "slug": "kje-dogaja",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/logo.png",
+    "icon": "./assets/images/final_quest_240x240.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
@@ -14,18 +14,30 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.Natively",
+      "bundleIdentifier": "com.kjedogaja.app",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "Lokacijo uporabljamo za prikaz bližnjih dogodkov.",
+        "NSPhotoLibraryUsageDescription": "Dostop do fotografij potrebujemo za nalaganje slik dogodkov.",
+        "NSPhotoLibraryAddUsageDescription": "Dostop do fotografij potrebujemo za shranjevanje in nalaganje vsebin.",
+        "NSUserNotificationsUsageDescription": "Obvestila uporabljamo za opomnike dogodkov in nove dogodke organizatorjev."
       }
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/logo.png",
+        "foregroundImage": "./assets/images/final_quest_240x240.png",
         "backgroundColor": "#140B2D"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.anonymous.Natively"
+      "package": "com.kjedogaja.app",
+      "permissions": [
+        "POST_NOTIFICATIONS",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/images/logo.png",
@@ -34,7 +46,25 @@
     "plugins": [
       "expo-font",
       "expo-router",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Dostop do fotografij potrebujemo za nalaganje slik dogodkov."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Lokacijo uporabljamo za prikaz bližnjih dogodkov."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#C918FF"
+        }
+      ]
     ],
     "scheme": "kjedogaja",
     "experiments": {
@@ -42,7 +72,7 @@
     },
     "extra": {
       "router": {},
-      "backendUrl": "http://192.168.0.38:3000"
+      "backendUrl": "https://api.example.com"
     }
   }
 }

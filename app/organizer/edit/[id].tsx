@@ -26,6 +26,8 @@ import * as Brand from "@/constants/Colors";
 import { resolveStorageUrl } from "@/utils/storage";
 import { authenticatedPut, isBackendConfigured } from "@/utils/api";
 import { coordsForCity } from "@/utils/geo";
+import { normalizeLineup, eventStarted } from "@/utils/date";
+import { parseRouteParam, isLikelyUuid } from "@/utils/validation";
 
 const GENRES = ["electronic", "rock", "pop", "hip-hop", "techno", "house", "trance", "dnb", "dubstep", "other"];
 
@@ -43,6 +45,7 @@ const SLOVENIAN_REGIONS = [
 
 export default function EditEventScreen() {
   const { id } = useLocalSearchParams();
+  const eventId = parseRouteParam(id as any);
   const router = useRouter();
   const theme = useTheme();
   const { user, userRole, loading: authLoading } = useAuth();
@@ -85,21 +88,31 @@ export default function EditEventScreen() {
   const [showStartTimePicker, setShowStartTimePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [showEndTimePicker, setShowEndTimePicker] = useState(false);
+  const [editingLocked, setEditingLocked] = useState(false);
 
   useEffect(() => {
     const fetchEvent = async () => {
-      if (!id || authLoading) {
+      if (!eventId || authLoading) {
+        return;
+      }
+
+      if (!isLikelyUuid(eventId)) {
+        setError({
+          title: "Neveljaven ID dogodka",
+          message: "Povezava do dogodka ni pravilna.",
+        });
+        setLoading(false);
         return;
       }
 
       try {
         setLoading(true);
-        console.log("[Uredi dogodek] Pridobivanje dogodka:", id);
+        console.log("[Uredi dogodek] Pridobivanje dogodka:", eventId);
 
         const { data, error: fetchError } = await supabase
           .from("events")
           .select("*")
-          .eq("id", id)
+          .eq("id", eventId)
           .single();
 
         if (fetchError) {
@@ -123,6 +136,9 @@ export default function EditEventScreen() {
         const posterPreview = storedPoster
           ? (await resolveStorageUrl({ bucket: "event-posters", value: storedPoster })) ?? ""
           : "";
+
+        const hasStarted = eventStarted(data.starts_at);
+        setEditingLocked(hasStarted);
 
         setFormData({
           title: data.title,
@@ -156,9 +172,13 @@ export default function EditEventScreen() {
     };
 
     fetchEvent();
-  }, [id, authLoading]);
+  }, [eventId, authLoading]);
 
   const handlePosterUpload = async () => {
+    if (!eventId || editingLocked) {
+      return;
+    }
+
     try {
       console.log("[Edit Event] Requesting image picker permission");
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -192,7 +212,7 @@ export default function EditEventScreen() {
       const uri = image.uri;
       const fileExtFromUri = uri.split("?")[0].split(".").pop();
       const safeExt = fileExtFromUri && fileExtFromUri.length <= 5 ? fileExtFromUri : "jpg";
-      const filePath = `${id}/poster.${safeExt}`;
+      const filePath = `${eventId}/poster.${safeExt}`;
 
       const mime = image.mimeType || "image/jpeg";
       const sourceUri = image.base64
@@ -247,10 +267,19 @@ export default function EditEventScreen() {
 
   const handleUpdate = async () => {
     console.log("[Uredi dogodek] Poskus posodobitve dogodka");
-    console.log("[Uredi dogodek] Event ID:", id);
+    console.log("[Uredi dogodek] Event ID:", eventId);
     console.log("[Uredi dogodek] Current status:", formData.status);
     console.log("[Uredi dogodek] User role:", userRole);
     
+    if (editingLocked) {
+      setToast({
+        visible: true,
+        message: "Dogodka po začetku ni več mogoče urejati",
+        type: "error",
+      });
+      return;
+    }
+
     if (!formData.title || !formData.region || !formData.city || !formData.address) {
       setToast({
         visible: true,
@@ -269,7 +298,17 @@ export default function EditEventScreen() {
       return;
     }
 
-    if (!id) {
+    const normalizedLineup = normalizeLineup(formData.lineup);
+    if (!normalizedLineup || !normalizedLineup.includes(",")) {
+      setToast({
+        visible: true,
+        message: "Lineup je obvezen in mora biti ločen z vejicami",
+        type: "error",
+      });
+      return;
+    }
+
+    if (!eventId) {
       console.error("[Uredi dogodek] Neveljaven ID dogodka");
       setToast({
         visible: true,
@@ -303,10 +342,10 @@ export default function EditEventScreen() {
       // Prefer backend API (bypasses overly strict Supabase RLS for past events)
       try {
         if (isBackendConfigured()) {
-          await authenticatedPut(`/api/events/${id}`, {
+          await authenticatedPut(`/api/events/${eventId}`, {
             title: formData.title,
             description: formData.description || null,
-            lineup: formData.lineup || null,
+            lineup: normalizedLineup,
             posterUrl: formData.posterPath || formData.posterUrl || null,
             region: formData.region,
             city: formData.city,
@@ -335,7 +374,7 @@ export default function EditEventScreen() {
         .update({
           title: formData.title,
           description: formData.description || null,
-          lineup: formData.lineup || null,
+            lineup: normalizedLineup,
           poster_url: formData.posterPath || formData.posterUrl || null,
           region: formData.region,
           city: formData.city,
@@ -351,7 +390,7 @@ export default function EditEventScreen() {
           ticket_url: formData.ticketUrl || null,
           status: formData.status,
         })
-        .eq("id", id);
+        .eq("id", eventId);
 
       if (updateError) {
         console.error("[Uredi dogodek] Napaka Supabase:", updateError);
@@ -442,7 +481,7 @@ export default function EditEventScreen() {
               <Text style={[styles.label, { color: theme.colors.text }]}>Lineup</Text>
               <TextInput
                 style={[styles.textArea, { color: theme.colors.text, borderColor: theme.colors.border }]}
-                placeholder="Lineup izvajalcev"
+                placeholder="npr. Artist A, Artist B, Artist C"
                 placeholderTextColor={Brand.textSecondary}
                 value={formData.lineup}
                 onChangeText={(text) => setFormData({ ...formData, lineup: text })}
@@ -533,6 +572,7 @@ export default function EditEventScreen() {
                   value={formData.startsAt}
                   mode="date"
                   display="default"
+                  minimumDate={new Date()}
                   onChange={(event, date) => {
                     setShowStartDatePicker(false);
                     if (date) {
@@ -562,7 +602,13 @@ export default function EditEventScreen() {
                     setShowStartTimePicker(false);
                     if (date) {
                       const newDate = new Date(formData.startsAt);
-                      newDate.setHours(date.getHours(), date.getMinutes());
+                      newDate.setHours(date.getHours(), date.getMinutes(), 0, 0);
+                      if (newDate.getTime() < Date.now()) {
+                        const roundedNow = new Date();
+                        roundedNow.setSeconds(0, 0);
+                        setFormData({ ...formData, startsAt: roundedNow });
+                        return;
+                      }
                       setFormData({ ...formData, startsAt: newDate });
                     }
                   }}
@@ -583,6 +629,7 @@ export default function EditEventScreen() {
                   value={formData.endsAt}
                   mode="date"
                   display="default"
+                  minimumDate={formData.startsAt}
                   onChange={(event, date) => {
                     setShowEndDatePicker(false);
                     if (date) {
@@ -654,7 +701,7 @@ export default function EditEventScreen() {
                   <Text
                     style={[
                       styles.priceTypeText,
-                      { color: formData.priceType === "free" ? Brand.primaryGradientStart : theme.colors.text },
+                      { color: formData.priceType === "free" ? Brand.textPrimary : theme.colors.text },
                     ]}
                   >
                     Brezplačno
@@ -670,7 +717,7 @@ export default function EditEventScreen() {
                   <Text
                     style={[
                       styles.priceTypeText,
-                      { color: formData.priceType === "paid" ? Brand.primaryGradientStart : theme.colors.text },
+                      { color: formData.priceType === "paid" ? Brand.textPrimary : theme.colors.text },
                     ]}
                   >
                     Plačljivo
@@ -716,7 +763,7 @@ export default function EditEventScreen() {
                   <Text
                     style={[
                       styles.priceTypeText,
-                      { color: formData.status === "draft" ? Brand.primaryGradientStart : theme.colors.text },
+                      { color: formData.status === "draft" ? Brand.textPrimary : theme.colors.text },
                     ]}
                   >
                     Osnutek
@@ -732,7 +779,7 @@ export default function EditEventScreen() {
                   <Text
                     style={[
                       styles.priceTypeText,
-                      { color: formData.status === "published" ? Brand.primaryGradientStart : theme.colors.text },
+                      { color: formData.status === "published" ? Brand.textPrimary : theme.colors.text },
                     ]}
                   >
                     Objavljeno
@@ -743,12 +790,12 @@ export default function EditEventScreen() {
               <TouchableOpacity
                 style={[styles.updateButton, { backgroundColor: theme.colors.primary }]}
                 onPress={handleUpdate}
-                disabled={saving}
+                disabled={saving || editingLocked}
               >
                 {saving ? (
                   <ActivityIndicator color={Brand.primaryGradientStart} />
                 ) : (
-                  <Text style={styles.updateButtonText}>Posodobi dogodek</Text>
+                  <Text style={styles.updateButtonText}>{editingLocked ? "Urejanje zaklenjeno" : "Posodobi dogodek"}</Text>
                 )}
               </TouchableOpacity>
             </View>

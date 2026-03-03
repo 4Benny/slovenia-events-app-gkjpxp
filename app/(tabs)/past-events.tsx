@@ -19,11 +19,13 @@ import { supabase } from "@/app/integrations/supabase/client";
 import { Screen } from "@/components/ui/Screen";
 import * as Brand from "@/constants/Colors";
 import { resolveStorageUrl } from "@/utils/storage";
+import { EventFeedCard } from "@/components/EventFeedCard";
 
 interface Event {
   id: string;
   title: string;
   description: string;
+  lineup?: string | null;
   poster_url: string | null;
   region: string;
   city: string;
@@ -151,121 +153,27 @@ export default function PastEventsScreen() {
       return null;
     }
 
-    // Display starts_at instead of ends_at
-    const startsAtDate = new Date(item.starts_at);
-    const dateDisplay = startsAtDate.toLocaleDateString("sl-SI", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-    
     const cityText = item.city || "Neznano mesto";
-    const priceText = item.price_type === "free" ? "Brezplačno" : `€${item.price || 0}`;
-
-    // Calculate how many stars should be yellow based on average rating
-    // Show all 5 stars, but only fill the percentage based on average
-    const avgRating = item.avg_rating || 0;
-    const fullStars = Math.floor(avgRating);
-    const partialStar = avgRating - fullStars;
 
     return (
-      <TouchableOpacity
-        style={[styles.eventCard, { backgroundColor: Brand.surfaceDark, borderColor: Brand.borderSubtle, borderWidth: 1 }]}
-        onPress={() => handleEventPress(item.id)}
-        activeOpacity={0.7}
-      >
-        {item.poster_url && (
-          <Image source={{ uri: item.poster_url }} style={styles.eventImage} />
-        )}
-        <View style={styles.eventContent}>
-          <View style={styles.eventHeader}>
-            <Text style={[styles.eventTitle, { color: Brand.textPrimary }]} numberOfLines={2}>
-              {item.title}
-            </Text>
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>KONČANO</Text>
-            </View>
-          </View>
-
-          {item.avg_rating !== null && item.avg_rating !== undefined && (
-            <View style={styles.ratingRow}>
-              <View style={styles.stars}>
-                {[1, 2, 3, 4, 5].map((star) => {
-                  let starColor = Brand.starInactive;
-                  
-                  if (star <= fullStars) {
-                    starColor = Brand.starActive;
-                  } else if (star === fullStars + 1 && partialStar > 0) {
-                    // For partial star, we'll show it as filled if partial >= 0.5
-                    starColor = partialStar >= 0.5 ? Brand.starActive : Brand.starInactive;
-                  }
-                  
-                  const starIcon = starColor === Brand.starActive ? "⭐" : "☆";
-                  
-                  return (
-                    <Text key={star} style={[styles.star, { color: starColor }]}>
-                      {starIcon}
-                    </Text>
-                  );
-                })}
-              </View>
-              <Text style={[styles.ratingText, { color: Brand.textSecondary }]}>
-                {item.avg_rating.toFixed(1)}
-              </Text>
-            </View>
-          )}
-
-          <View style={styles.eventMeta}>
-            <View style={styles.metaRow}>
-              <IconSymbol
-                ios_icon_name="calendar"
-                android_material_icon_name="event"
-                size={16}
-                color={Brand.textSecondary}
-              />
-              <Text style={[styles.metaText, { color: Brand.textSecondary }]}>
-                {dateDisplay}
-              </Text>
-            </View>
-
-            <View style={styles.metaRow}>
-              <IconSymbol
-                ios_icon_name="music.note"
-                android_material_icon_name="music-note"
-                size={16}
-                color={Brand.textSecondary}
-              />
-              <Text style={[styles.metaText, { color: Brand.textSecondary }]}>
-                {item.genre}
-              </Text>
-            </View>
-
-            <View style={styles.metaRow}>
-              <IconSymbol
-                ios_icon_name="ticket"
-                android_material_icon_name="confirmation-number"
-                size={16}
-                color={Brand.textSecondary}
-              />
-              <Text style={[styles.metaText, { color: Brand.textSecondary }]}>
-                {priceText}
-              </Text>
-            </View>
-
-            <View style={styles.metaRow}>
-              <IconSymbol
-                ios_icon_name="location"
-                android_material_icon_name="location-on"
-                size={16}
-                color={Brand.textSecondary}
-              />
-              <Text style={[styles.metaText, { color: Brand.textSecondary }]}>
-                {cityText}
-              </Text>
-            </View>
-          </View>
-        </View>
-      </TouchableOpacity>
+      <EventFeedCard
+        id={item.id}
+        title={item.title}
+        posterUrl={item.poster_url}
+        startsAt={item.starts_at}
+        lineup={item.lineup}
+        genre={item.genre}
+        priceType={item.price_type}
+        price={item.price}
+        city={cityText}
+        badgeText="KONČANO"
+        onPress={handleEventPress}
+        rightMeta={
+          item.avg_rating !== null && item.avg_rating !== undefined ? (
+            <Text style={[styles.metaText, { color: Brand.starActive, marginLeft: 8 }]}>⭐ {item.avg_rating.toFixed(1)}</Text>
+          ) : null
+        }
+      />
     );
   }, [handleEventPress]);
 
@@ -316,6 +224,10 @@ export default function PastEventsScreen() {
                 </Text>
               </View>
             }
+            initialNumToRender={8}
+            maxToRenderPerBatch={8}
+            windowSize={7}
+            removeClippedSubviews
           />
         )}
       </Screen>
@@ -351,71 +263,6 @@ const styles = StyleSheet.create({
   },
   listContentWithTabBar: {
     paddingBottom: 100,
-  },
-  eventCard: {
-    borderRadius: 16,
-    marginBottom: 16,
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  eventImage: {
-    width: "100%",
-    height: 200,
-  },
-  eventContent: {
-    padding: 16,
-  },
-  eventHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 12,
-  },
-  eventTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    flex: 1,
-    marginRight: 8,
-  },
-  badge: {
-    backgroundColor: Brand.surfaceMuted,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  badgeText: {
-    color: Brand.textSecondary,
-    fontSize: 10,
-    fontWeight: "bold",
-  },
-  ratingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 12,
-  },
-  stars: {
-    flexDirection: "row",
-    gap: 4,
-  },
-  star: {
-    fontSize: 16,
-  },
-  ratingText: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  eventMeta: {
-    gap: 8,
-  },
-  metaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
   },
   metaText: {
     fontSize: 14,

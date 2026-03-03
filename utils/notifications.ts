@@ -66,9 +66,13 @@ export async function scheduleGoingReminders(params: {
   const startsAt = new Date(startsAtISO);
   const now = new Date();
 
+  if (!Number.isFinite(startsAt.getTime())) {
+    return;
+  }
+
   const triggers: { date: Date; label: string }[] = [
-    { date: new Date(startsAt.getTime() - 24 * 60 * 60 * 1000), label: "1 dan" },
-    { date: new Date(startsAt.getTime() - 3 * 60 * 60 * 1000), label: "3 ure" },
+    { date: new Date(startsAt.getTime() - 3 * 24 * 60 * 60 * 1000), label: "3 dni" },
+    { date: new Date(startsAt.getTime() - 1 * 60 * 60 * 1000), label: "1 uro" },
   ].filter((t) => t.date.getTime() > now.getTime());
 
   if (triggers.length === 0) return;
